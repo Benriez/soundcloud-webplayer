@@ -9,13 +9,17 @@
 </template>
 
 <script>
+
   import SoundCloudPlayer from './components/SoundCloudPlayer';
+  import { store } from './store/store'
+  
 
   export default {
     name: 'app',
+    store,
     components: {
-      SoundCloudPlayer,
-    },
+      SoundCloudPlayer, 
+    }
   };
 </script>
 

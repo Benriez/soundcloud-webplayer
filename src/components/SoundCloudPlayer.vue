@@ -23,7 +23,7 @@
               <span>{{ progressBarCurrentPosition }}</span>
             </div>
             <div class="column is-fullwidth" id="progressBar">
-              <nouislider :config="progressSlider.config" :values="progressSlider.values"></nouislider>
+              <!-- <nouislider :config="progressSlider.config" :values="progressSlider.values"></nouislider> -->
             </div>
             <div class="column is-narrow has-text-centered">{{progressBarDuration}}</div>
           </div>
@@ -39,6 +39,10 @@
           <i v-if="!content" class="fa fa-spinner fa-pulse fa-fw is-primary"></i>
           <i v-if="content" class="fa fa-play" aria-hidden="true"></i>
         </a>
+        <a class="card-footer-item" v-show="!running" @click.prevent="playNewSong">
+          <i v-if="!content" class="fa fa-spinner fa-pulse fa-fw is-primary"></i>
+          <i v-if="content" class="fa fa-angle-right" aria-hidden="true"></i>
+        </a>
       </footer>
     </div>
 
@@ -46,10 +50,12 @@
     <section class="section">
       <article class="message is-info">
         <div class="message-body">
-          <strong>Pro Tip!</strong>
-          You can open this player and provide a song with a url query parameter.<br><br>
-          Example: <br><a :href="baseUrl + '?url=https://soundcloud.com/jaidencollisbootlegs2/danceoff'">{{ baseUrl
-          }}?url=https://soundcloud.com/jaidencollisbootlegs2/danceoff</a>
+          <h3>Tracklist:</h3>
+          <li v-for="track in playlist" :key="track.id">
+            {{ track }}
+          </li>
+
+
         </div>
       </article>
     </section>
@@ -85,6 +91,7 @@
             Enter a valid https://soundcloud.com url<br>
             Example: https://soundcloud.com/potionrecords/the-magician-together
           </p>
+          
         </section>
       </div>
     </div>
@@ -94,7 +101,8 @@
 <script>
   import moment from 'moment';
   import uri from 'urijs';
-  import VueNouislider from 'vue-nouislider/dist/vue-nouislider.common';
+  //import VueNouislider from 'vue-nouislider/dist/vue-nouislider.common';
+  import io from 'socket.io-client'
 
   export default {
     name: 'soundcloudwebplayer',
@@ -104,7 +112,12 @@
         running: false,
         content: false,
         newSongModal: false,
+        user: '',
+        message: '',
+        messages: [],
+        socket: io('localhost:3000'),
         player: '',
+        playlist: ['https://soundcloud.com/trndmusik/uberhaupt-auserdem-sunshine-trndmsk'],
         song: {
           cover: '',
           title: '',
@@ -142,10 +155,21 @@
       this.player
         .bind(SC.Widget.Events.PLAY_PROGRESS, (e) => {
           this.song.currentPosition = e.currentPosition;
-        })
+      })
 
       this.$on('newValueSet', (newValue) => {
         this.player.seekTo(newValue[0])
+      })
+
+      this.socket.on('MESSAGE', (data) => {
+          this.playlist = [...this.playlist, data];
+          //this.playlist.push(data)
+          // this.messages.push(data)
+          console.log(data)
+          this.socket.emit('SEND_MESSAGE', {
+              added: true
+          });
+          this.message = ''
       })
 
     },
@@ -153,6 +177,12 @@
     watch: {
       progressBarCurrentPosition: function() {
         this.$emit('updateValue', this.song.currentPosition)
+        console.log( this.song.duration - this.song.currentPosition )
+        if (this.song.duration - this.song.currentPosition <= 1000){
+          this.playlist.shift()
+          
+          this.playNewSong()
+        }
       }
     },
 
@@ -217,14 +247,23 @@
        * Check the new song url and load the song if it is valid
        */
       playNewSong() {
-        if (this.checkUrl(this.newUrl) !== null) {
+        //place soundcloud url from telegramm
+        this.newUrl = this.playlist[0]
+        console.log(this.newUrl)
+        console.log(this.checkUrl(this.newUrl))
+        //if (this.checkUrl(this.newUrl) !== null) {
+          console.log('after if')
           this.newUrlNotPassing = false;
           this.newSongModal = false;
           this.player.load(this.newUrl);
-          this.content = false;
-        } else {
-          this.newUrlNotPassing = true;
-        }
+          setTimeout(() =>{
+            console.log('now')
+            this.toggleSong()
+          }, 3000)
+          
+        // } else {
+        //   this.newUrlNotPassing = true;
+        // }
       },
       /**
        * Toggle song if space bar is pressed
@@ -248,6 +287,16 @@
           return url.match(pattern)
         }
       },
+      // getPlaylist(){
+      //   this.$axios.get('http://localhost:3000/playlist').then(response => {
+      //     console.log('response: ', response)
+      //   }).catch(err => {
+      //     console.log('err: ', err)
+      //   }) 
+      // },
+      changed: function(event) {
+        this.$store.commit('change', event.target.value)
+      }
     },
     computed: {
       songSrc: function () {
@@ -270,7 +319,9 @@
         return moment(this.song.currentPosition).format('mm:ss')
       },
       progressBarDuration: function () {
+        
         return moment(this.song.duration).format('mm:ss')
+
       },
     },
     filters: {},
